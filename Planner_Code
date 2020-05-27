@@ -1,0 +1,256 @@
+"""
+20200526
+Project Capstone Datascience Cousera
+
+Foursquera categories list, more info:
+https://developer.foursquare.com/docs/build-with-foursquare/categories/
+
+"""
+
+import time
+import copy
+import webbrowser
+import requests # library to handle requests
+import pandas as pd # library for data analsysis
+import numpy as np # library to handle data in a vectorized manner
+from datetime import datetime
+from collections import Counter
+from geopy.geocoders import Nominatim # module to convert an address into latitude and longitude values
+
+# import Exceptions from GeoPy
+from geopy.exc import (GeocoderQueryError, GeocoderQuotaExceeded, ConfigurationError, GeocoderParseError)
+
+# id's as shown in Foursquare doc site, dict is created to save the values
+# improvement? extract directly from the web site
+
+categories = {'Arts & Entertainment': '4d4b7104d754a06370d81259', 'College & University': '4d4b7105d754a06372d81259',
+'Event': '4d4b7105d754a06373d81259', 'Food': '4d4b7105d754a06374d81259', 'Nightlife Spot': '4d4b7105d754a06376d81259',
+'Outdoors & Recreation': '4d4b7105d754a06377d81259', 'Professional & Other Places': '4d4b7105d754a06375d81259',
+'Residence': '4e67e38e036454776db1fb3a', 'Travel & Transport': '4d4b7105d754a06379d81259'}
+
+keys_list = list(categories)
+
+# dict with sorting criterias which must be selected by user for each previous category.
+#The key is que mask value, first element in list is the original field name in Foursquare DB, second determines if que venues are sorted in a ascending or desending way
+
+criterias = {'By rating': ['rating', False], 'By distance': ['distance', True], 'By tips': ['tips.count', False],
+             'By rating signals': ['ratingSignals', False], 'By price': ['price.currency', True]}
+
+cri_list = list(criterias)
+
+# declare function to return latitude and longitude values from a address
+def geocode_address(geo_locator, line_address, retry_counter=0):
+    # the geopy geocoding call
+    location = geo_locator.geocode(line_address)
+    try:  
+        if location is not None:
+            return location
+    # To retry because intermittent failures sometimes occurs
+    except (GeocoderQueryError) as error:
+        if retry_counter < RETRY_COUNTER_CONST:
+            return geocode_address(geo_locator, line_address, retry_counter + 1)
+        else:
+            location_result = {"Lat": 0, "Long": 0, "Error": error.message,
+        "location_type": ""}
+            return location_result
+        # after geocode call, if no result found, raise a ValueError
+        if location is None:
+            raise ValueError("None location found, please verify your address line")
+        # To catch generic and geocoder errors.
+    except (ValueError, GeocoderQuotaExceeded, ConfigurationError, GeocoderParseError) as error:
+        location_result = {"Lat": 0, "Long": 0, "Error": error.message, "location_type": ""}
+        # geocode the built line_address and passing optional componentRestrictions
+        return location_result
+
+# geo_locator creation
+geolocator = Nominatim(user_agent="tour_agent")
+
+# input user data
+# improvement? use Tkinter and dialog boxes
+while True: 
+    initPlace = input("Enter starting address of trip (address #, city, country) ")   # Initial location of the trip
+    location = geocode_address(geolocator, initPlace)
+    if type(location.latitude) == float:
+        break
+    elif type(location) == None:
+        print('Error')
+
+while True:
+    ans = input("Same return address? (y/n): ")
+    if ans.capitalize() == 'Y':
+        finalPlace = copy.copy(initPlace)  # copy no reference in memory
+        break
+    elif ans.capitalize() == 'N':
+        while True: 
+            finalPlace = input("Enter return address (address #, city, country): ")   # Final location of the trip
+            location = geocode_address(geolocator, finalPlace)
+            if type(location.latitude) == float:
+                break
+            elif type(location) == None:
+                print('Error')
+            
+        break
+    print('Please indicate yes or no')
+     
+ans = input('Indicate the number of activities to be carried out: ')
+print("Select {} of the following activity categories separated by space: \n (1) Arts & Entertainment  \n (2) College & University \n (3) Event \n (4) Food \n (5) Nightlife Spot \n (6) Outdoors & Recreation \n (7) Professional & Other Places \n (8) Residence \n (9) Travel & Transport".format(ans))
+print("Additional values to those indicated will be truncated")
+
+listCategory = input().split()
+if len(listCategory) > int(ans):
+    del listCategory[ans:]
+elif len(listCategory) < int(ans):
+    ans = len(listCategory)
+    print('Number of activities to search updated to {}'.format(ans))
+
+listCategory = list(map(lambda x: int(x), listCategory))
+listCategory = list(map(lambda x: keys_list[x - 1], listCategory))
+newListCategory = list()
+for ct in listCategory:
+    newListCategory.append(categories[ct])
+
+print("Schedule the {} activities listed above in the HH:MM format separated by space".format(ans))
+listHour = input().split()
+newListHour = list(map(lambda x: datetime.strptime(x, '%H:%M').time(), listHour))
+if len(newListHour) > int(ans):
+    del newListHour[ans:]
+
+print("Select {} of the following criteria for each previous activity separated by space: \n (1) By rating \n (2) By distance \n (3) By tips \n (4) By rating signals \n (5) By price".format(ans))
+print("Additional values to those indicated will be truncated")
+listCriteria = input().split()
+
+if len(listCriteria) > int(ans):
+    del listCriteria[ans:]
+
+listCriteria = list(map(lambda x: int(x), listCriteria))
+listCriteria = list(map(lambda x: cri_list[x - 1], listCriteria))
+
+newListCriteria = list()
+for i, cr in enumerate(listCriteria):
+    newListCriteria.append([criterias[cr][0], criterias[cr][1]])
+       
+trip = {}
+numPlaces = [*range(len(newListCategory))]
+
+for i, cat, hr, cri in zip(numPlaces, newListCategory, newListHour, newListCriteria):
+    trip[i] = [cat, hr, cri]
+    
+unique = Counter()  # Dictionary with unique categories and number of occurrences
+for word in newListCategory:
+     unique[word] += 1
+        
+print('The journey will start at the following address: {}'.format(initPlace))
+print(" ")
+print('The journey will end at the following address: {}'.format(finalPlace))
+print(" ")
+print("Summary of selected activities")
+print(" ")
+for place, time, crit in zip(listCategory, newListHour, newListCriteria):
+    print('{} at {} according to {} criteria'.format(place, time, crit[0]))
+
+CLIENT_ID = 'OZBTXJGGBFXWEWEMTPXUFUNKO1NBJKPVZPUDGCNA5TPCB5IW' # your Foursquare ID
+CLIENT_SECRET = 'BQMB2MKSETYKIGFPCHTCFCIT5UZB531KR15OL0PZNU0ARCSJ' # your Foursquare Secret
+VERSION = '20180604'
+LIMIT = input('Enter the number of places or attractions among which to generate a comparison according to the defined criteria: ')
+RADIUS = input('Enter the radius (m) of opportunity search: ')
+
+latitude = location.latitude
+longitude = location.longitude
+
+incolumns = ['contact.phone', 'contact.formatted phone', 'rating', 'ratingSignals', 'tips.count', 'url', 'price.currency']
+valColumns = []
+to_route = pd.DataFrame()
+
+for key in trip:
+    url = 'https://api.foursquare.com/v2/venues/search?client_id={}&client_secret={}&ll={},{}&v={}&radius={}&limit={}&categoryId={}'.format(CLIENT_ID, CLIENT_SECRET, latitude, longitude, VERSION, RADIUS, LIMIT, trip.get(key)[0])
+
+    results = requests.get(url).json()   # send GET request
+    venues = results['response']['venues']   # assign relevant part of JSON to venues
+    dataframe = pd.json_normalize(venues)   # tranform venues into a dataframe
+
+    # keep only columns that include venue name, and anything that is associated with location
+    filtered_columns = ['id', 'name', 'categories'] + [col for col in dataframe.columns if col.startswith('location.')]
+    dataframe_filtered = dataframe.loc[:, filtered_columns]
+    
+    # function that extracts the category of the venue
+    def get_category_type(row):
+        try:
+            categories_list = row['categories']
+        except:
+            categories_list = row['venue.categories']
+    
+        if len(categories_list) == 0:
+            return None
+        else:
+            return categories_list[0]['name']
+
+    dataframe_filtered['categories'] = dataframe_filtered.apply(get_category_type, axis=1)   # filter the category for each row
+    dataframe_filtered.columns = [column.split('.')[-1] for column in dataframe_filtered.columns]   # clean column names by keeping only last term
+    dataframe_filtered.drop(['labeledLatLngs'], axis=1, inplace=True)
+
+    for index, row in dataframe_filtered.iterrows():  # identificación de top places de acuerdo a criterios
+        url = 'https://api.foursquare.com/v2/venues/{}?client_id={}&client_secret={}&v={}'.format(row['id'], CLIENT_ID, CLIENT_SECRET, VERSION)
+        in_results = requests.get(url).json()
+        in_venue = in_results['response']['venue']   # assign relevant part of JSON to venues
+        in_df = pd.json_normalize(in_venue)   # tranform venues into a dataframe
+
+        for name in incolumns:
+            if name in in_df.columns:
+                valColumns.append(in_df.loc[0, name])
+            else:
+                valColumns.append(np.nan)
+                
+        valColumns = [valColumns]
+        #print(valColumns)
+        temp = pd.DataFrame(valColumns, columns = incolumns)
+        #print(temp.head())
+        valColumns.clear()                                                 
+        in_df.drop(in_df.index, inplace=True)
+ 
+    dataframe_filtered = pd.concat([dataframe_filtered, temp.reindex(dataframe_filtered.index)], axis=1)
+    print(dataframe_filtered.head())
+    #dataframe_filtered.dropna(subset = [trip.get(key)[2][0]], inplace=True)
+    
+    if dataframe_filtered[trip.get(key)[2][0]].isnull().values.any():
+        dataframe_filtered.sort_values(by=[trip.get(key)[2][0]], axis=0, ascending=trip.get(key)[2][1], inplace=True)   # Ordenamiento según criterio
+    else:
+        dataframe_filtered.sort_values(by=['distance'], axis=0, ascending=True, inplace=True)   # Ordenamiento según criterio
+
+    to_route = pd.concat([to_route, dataframe_filtered.loc[[0],:]])   # Agregar resultado a DataFrame
+
+    # Selección de nueva ubicación para siguiente búsqueda
+    latitude = dataframe_filtered.loc[0, 'lat']
+    longitude = dataframe_filtered.loc[0, 'lng']
+        
+    dataframe.drop(dataframe.index, inplace=True)
+    dataframe_filtered.drop(dataframe_filtered.index, inplace=True)
+    temp.drop(temp.index, inplace=True)
+
+to_route.head()
+
+mode = 'driving'   # travel mode
+map_address = []   # addresses list
+
+location = geocode_address(geolocator, initPlace)
+map_address.append(location.latitude)
+map_address.append(location.longitude)
+
+location = geocode_address(geolocator, finalPlace)
+map_address.append(location.latitude)
+map_address.append(location.longitude)
+
+map_address.append(mode)
+
+for index, row in to_route.iterrows():
+    map_address.append(row['lat'])
+    map_address.append(row['lng'])
+    
+stops = len(to_route) - 1
+let = '%7C{}%2C{}'
+let = let * stops
+
+url = 'https://www.google.com/maps/dir/?api=1&origin={}%2C{}&destination={}%2C{}&travelmode={}&waypoints={}%2C{}' + let
+
+url = url.format(*map_address)
+
+webbrowser.open_new(url)
