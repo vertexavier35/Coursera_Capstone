@@ -147,16 +147,14 @@ print("Summary of selected activities")
 print(" ")
 for place, time, crit in zip(listCategory, newListHour, newListCriteria):
     print('{} at {} according to {} criteria'.format(place, time, crit[0]))
-
-CLIENT_ID = 'OZBTXJGGBFXWEWEMTPXUFUNKO1NBJKPVZPUDGCNA5TPCB5IW' # your Foursquare ID
-CLIENT_SECRET = 'BQMB2MKSETYKIGFPCHTCFCIT5UZB531KR15OL0PZNU0ARCSJ' # your Foursquare Secret
+CLIENT_ID = 'STEZB210RJWUNERSDYVMKTQVE1JVQIWFBNM5LWLFW2FTTFFS' # your Foursquare ID
+CLIENT_SECRET = 'FT20HM0AWHFENIPGSBJAFBCZ5JQB2NL4225UYZM5VFHFFKSX' # your Foursquare Secret
 VERSION = '20180604'
 LIMIT = input('Enter the number of places or attractions among which to generate a comparison according to the defined criteria: ')
 RADIUS = input('Enter the radius (m) of opportunity search: ')
 
 latitude = location.latitude
 longitude = location.longitude
-
 incolumns = ['contact.phone', 'contact.formatted phone', 'rating', 'ratingSignals', 'tips.count', 'url', 'price.currency']
 valColumns = []
 to_route = pd.DataFrame()
@@ -188,7 +186,7 @@ for key in trip:
     dataframe_filtered.columns = [column.split('.')[-1] for column in dataframe_filtered.columns]   # clean column names by keeping only last term
     dataframe_filtered.drop(['labeledLatLngs'], axis=1, inplace=True)
 
-    for index, row in dataframe_filtered.iterrows():  # identificación de top places de acuerdo a criterios
+    for idx, row in dataframe_filtered.iterrows():  # identificación de top places de acuerdo a criterios
         url = 'https://api.foursquare.com/v2/venues/{}?client_id={}&client_secret={}&v={}'.format(row['id'], CLIENT_ID, CLIENT_SECRET, VERSION)
         in_results = requests.get(url).json()
         in_venue = in_results['response']['venue']   # assign relevant part of JSON to venues
@@ -202,7 +200,11 @@ for key in trip:
                 
         valColumns = [valColumns]
         #print(valColumns)
-        temp = pd.DataFrame(valColumns, columns = incolumns)
+        if idx == 0:
+            temp = pd.DataFrame(valColumns, index = [idx], columns = incolumns)
+        else:
+            temp.append(valColumns, ignore_index = True)
+
         #print(temp.head())
         valColumns.clear()                                                 
         in_df.drop(in_df.index, inplace=True)
@@ -227,7 +229,6 @@ for key in trip:
     temp.drop(temp.index, inplace=True)
 
 to_route.head()
-
 mode = 'driving'   # travel mode
 map_address = []   # addresses list
 
